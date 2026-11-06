@@ -1,0 +1,52 @@
+---
+# Installs prerequisites. Needs root:  ansible-playbook setup.yml --ask-become-pass
+- name: Install Docker, kubectl and minikube
+  hosts: local
+  become: true
+  vars:
+    target_user: "{{ lookup('env', 'SUDO_USER') | default(lookup('env', 'USER'), true) }}"
+    arch_map: {x86_64: amd64, aarch64: arm64}
+    bin_arch: "{{ arch_map[ansible_architecture] | default('amd64') }}"
+
+  tasks:
+    - name: Install apt packages
+      ansible.builtin.apt:
+        name: [docker-ce, docker-ce-cli, containerd.io, docker-compose-plugin, conntrack, curl, ca-certificates]
+        state: present
+        update_cache: true
+
+    - name: Enable and start Docker
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Add {{ target_user }} to docker group
+      ansible.builtin.user:
+        name: "{{ target_user }}"
+        groups: docker
+        append: true
+
+    - name: Get latest stable kubectl version
+      ansible.builtin.uri:
+        url: https://dl.k8s.io/release/stable.txt
+        return_content: true
+      register: kubectl_version
+
+    - name: Install kubectl
+      ansible.builtin.get_url:
+        url: "https://dl.k8s.io/release/{{ kubectl_version.content | trim }}/bin/linux/{{ bin_arch }}/kubectl"
+        checksum: "sha256:https://dl.k8s.io/release/{{ kubectl_version.content | trim }}/bin/linux/{{ bin_arch }}/kubectl.sha256"
+        dest: /usr/local/bin/kubectl
+        mode: "0755"
+
+    - name: Install minikube
+      ansible.builtin.get_url:
+        url: "https://storage.googleapis.com/minikube/releases/latest/minikube-linux-{{ bin_arch }}"
+        checksum: "sha256:https://storage.googleapis.com/minikube/releases/latest/minikube-linux-{{ bin_arch }}.sha256"
+        dest: /usr/local/bin/minikube
+        mode: "0755"
+
+    - name: Reminder
+      ansible.builtin.debug:
+        msg: "Done. Log out and back in (or run 'newgrp docker') so {{ target_user }} can use Docker without sudo."

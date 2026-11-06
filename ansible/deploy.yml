@@ -1,0 +1,58 @@
+---
+# Builds the image and deploys to minikube. Run as your normal user (no sudo):
+#   ansible-playbook deploy.yml
+- name: Deploy Event Management Platform to minikube
+  hosts: local
+  gather_facts: false
+  vars:
+    project_dir: "{{ playbook_dir }}/.."
+    image: event-app:1.0
+    namespace: events
+
+  tasks:
+    - name: Check minikube status
+      ansible.builtin.command: minikube status
+      register: mk_status
+      changed_when: false
+      failed_when: false
+
+    - name: Start minikube (docker driver)
+      ansible.builtin.command: minikube start --driver=docker
+      when: mk_status.rc != 0
+
+    - name: Build Docker image {{ image }}
+      ansible.builtin.command: docker build -t {{ image }} {{ project_dir }}/app
+
+    - name: Load image into minikube
+      ansible.builtin.command: minikube image load {{ image }} --overwrite=true
+
+    - name: Apply namespace first
+      ansible.builtin.command: kubectl apply -f {{ project_dir }}/k8s/00-namespace.yaml
+
+    - name: Apply all manifests
+      ansible.builtin.command: kubectl apply -f {{ project_dir }}/k8s/
+      register: apply_out
+
+    - name: Show apply output
+      ansible.builtin.debug:
+        var: apply_out.stdout_lines
+
+    - name: Wait for Postgres rollout
+      ansible.builtin.command: kubectl -n {{ namespace }} rollout status deployment/postgres --timeout=180s
+      changed_when: false
+
+    - name: Restart app so pods pick up the freshly loaded image / config
+      ansible.builtin.command: kubectl -n {{ namespace }} rollout restart deployment/event-app
+
+    - name: Wait for app rollout
+      ansible.builtin.command: kubectl -n {{ namespace }} rollout status deployment/event-app --timeout=180s
+      changed_when: false
+
+    - name: Get service URL
+      ansible.builtin.command: minikube service event-app -n {{ namespace }} --url
+      register: svc_url
+      changed_when: false
+
+    - name: Print service URL
+      ansible.builtin.debug:
+        msg: "Event platform is live at {{ svc_url.stdout }}"

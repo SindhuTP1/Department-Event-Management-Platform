@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: event-config
+  namespace: events
+data:
+  DEPT_NAME: "Department of Computer Science"
+  EVENT_CATEGORIES: "Seminar,Workshop,Student Event,Hackathon"
+  MAX_REGISTRATIONS: "50"
+  REGISTRATION_OPEN: "false"
+  WELCOME_BANNER: "Registrations closed for this week"

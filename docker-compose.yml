@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: eventsdb
+      POSTGRES_USER: eventuser
+      POSTGRES_PASSWORD: eventpass
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eventuser -d eventsdb"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: ./app
+    image: event-app:1.0
+    ports:
+      - "5000:5000"
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      POSTGRES_DB: eventsdb
+      POSTGRES_USER: eventuser
+      POSTGRES_PASSWORD: eventpass
+      DEPT_NAME: "Department of Computer Science (local)"
+      EVENT_CATEGORIES: "Seminar,Workshop,Student Event"
+      MAX_REGISTRATIONS: "50"
+      REGISTRATION_OPEN: "true"
+      WELCOME_BANNER: "Local docker-compose test environment"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
